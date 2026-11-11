@@ -47,6 +47,11 @@ they usually drive the DevKit's live simulator, which behaves the same way.
 
 New markdown from `cybopal_display` replaces the picture; `cybopal_show` with `clear: true` removes it.
 
+`cybopal_display` renders only headings, bold, lists and paragraphs: never send tables, code blocks or diagram code
+(mermaid) as a "chart"; they show up as raw text. If you cannot make the picture (for example your code tool is not
+available), say so plainly and offer the numbers as a short list instead. Only tell the person something is on the
+screen when the tool result says so; the cameras face the person, not the screen, so they cannot check it.
+
 ## Seeing with the cameras
 
 `cybopal_look` returns a camera picture's file path. To read it, pass the path to your vision tool:

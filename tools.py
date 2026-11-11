@@ -97,8 +97,10 @@ SCHEMAS = {
                             "description": "how long to wait for the arm to arrive (default: the plugin setting, 3)"}}),
     "cybopal_display": _schema(
         "cybopal_display",
-        "Show something on the CyboPal ONE: markdown on the 27-inch main screen and/or a few words on Pauli. Does not "
-        "move the arm.",
+        "Show text on the CyboPal ONE: simple markdown on the 27-inch main screen and/or a few words on Pauli. The "
+        "screen renders only headings (#), **bold**, lists (-) and paragraphs: no tables, code blocks, images or "
+        "diagram code (mermaid and the like show up as raw text). For a chart, a picture or a video, make the file "
+        "and use cybopal_show. Does not move the arm.",
         {"markdown": _MARKDOWN, "pauli_text": _PAULI}),
     "cybopal_show": _schema(
         "cybopal_show",
