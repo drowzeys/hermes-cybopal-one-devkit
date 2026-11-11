@@ -1,0 +1,35 @@
+name: cybopal
+version: "0.1.0"
+manifest_version: 2
+api_version: 1
+description: "Drive a CyboPal ONE (a 27-inch 4K screen on a 6-DOF robotic arm, with the Pauli companion display) from Hermes: follow, posture presets, exact poses, gestures, both screens, both cameras and an emergency stop. Works today against the CyboPal ONE DevKit's live simulator; the same contract is kept for the hardware."
+author: "keys (drowzeys)"
+license: MIT
+homepage: https://github.com/drowzeys/hermes-cybopal
+tags: [robotics, hardware, simulator, embodiment, display, camera, local]
+requires_hermes: ">=0.22.7"
+provides_tools:
+  - cybopal_status
+  - cybopal_mode
+  - cybopal_pose
+  - cybopal_display
+  - cybopal_look
+  - cybopal_routine
+  - cybopal_stop
+provides_hooks: []
+config_schema:
+  device_url:
+    type: str
+    default: "http://127.0.0.1:5000"
+    label: "Device address"
+    description: "Where the CyboPal ONE DevKit simulator (or the device) answers. The default is the simulator on this computer."
+  allow_motion:
+    type: bool
+    default: true
+    label: "Allow the arm to move"
+    description: "Off: the screens and cameras still work, every motion command is refused. The emergency stop always works."
+  settle_seconds:
+    type: int
+    default: 3
+    label: "Wait for the arm (seconds)"
+    description: "How long a move waits for the arm to arrive before answering (0 to 10)."
