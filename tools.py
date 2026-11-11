@@ -29,10 +29,9 @@ MODES = {"follow": "tracking", "tracking": "tracking", "sit": "sit", "stand": "s
 
 ROUTINES = {
     "wave-hello": {
-        "description": "Wave the 27-inch panel, greet on Pauli, then return to follow.",
-        "steps": [{"mode": "wave", "pauli_text": "HELLO",
-                   "markdown": "# Hello\n\nCyboPal ONE waving in. Hermes is driving."},
-                  {"wait": 4.0}, {"mode": "follow"}]},
+        "description": "Wave the 27-inch panel and say HELLO on Pauli (the main screen is left as it is), then "
+                       "return to follow.",
+        "steps": [{"mode": "wave", "pauli_text": "HELLO"}, {"wait": 4.0}, {"mode": "follow"}]},
     "posture-cycle": {
         "description": "Sit, stand, recline, then back to follow: a quick test of the presets.",
         "steps": [{"mode": "sit"}, {"wait": 2.5}, {"mode": "stand"}, {"wait": 2.5},

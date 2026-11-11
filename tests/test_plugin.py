@@ -269,8 +269,8 @@ def test_builtin_routine(fake):
     settings, _ = fake
     out = run(settings, "cybopal_routine", name="wave-hello")
     assert out["done"] == "routine wave-hello" and out["mode"] == "tracking"
-    assert {"pauli_text": "HELLO", "display_markdown": tools.ROUTINES["wave-hello"]["steps"][0]["markdown"]} \
-        in [body for _, body in FakeDevice.posts]
+    assert {"pauli_text": "HELLO"} in [body for _, body in FakeDevice.posts]
+    assert FakeDevice.state["display_markdown"] == START["display_markdown"]  # the main screen is left alone
     assert ("/api/v1/mode", {"mode": "wave"}) in FakeDevice.posts and FakeDevice.posts[-1][1] == {"mode": "tracking"}
 
 
