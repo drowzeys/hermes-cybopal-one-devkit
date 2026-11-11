@@ -41,6 +41,10 @@ device ships, point `device_url` at it.
 - "What does the front camera see? Am I in frame?"
 - "Wave hello." · "Nod." · "Run the posture cycle."
 - "**Stop!**": freezes the arm at once. It stays stopped until you say it is safe again.
+- "Make a revenue chart from my spreadsheet and put it on the big screen." (with Hermes's code tool)
+- "Make a short video of a fox in the snow and show it on the monitor." (with the Imagination Studio plugin)
+- "Scan this receipt." · "Take a selfie." · "Tell me a joke." · "I'm having a rough day." · "Make me a meme."
+- "Design a stretch-break routine, try it, and save it."
 
 Or the command: `/cybopal`, `/cybopal stop`, `/cybopal sit`, `/cybopal say HELLO`, `/cybopal show # Hi`,
 `/cybopal look`, `/cybopal run wave-hello`, `/cybopal resume`.
@@ -63,9 +67,20 @@ Hermes moved the arm to *stand*, set an exact pan and tilt, and wrote both scree
 - `cybopal_pose`: exact pan, tilt, height, reach, roll and elbow; values outside the joint limits are refused, not
   clamped.
 - `cybopal_display`: markdown on the 27-inch screen, a few words on Pauli.
+- `cybopal_show`: a picture or video file on the 27-inch screen (a chart, a meme, a clip from Imagination Studio).
 - `cybopal_look`: a picture from the front (bezel) or base camera, delivered to the chat.
-- `cybopal_routine`: built-ins (`wave-hello`, `posture-cycle`, `meeting-brief`, `nod`) or up to 24 steps of your own.
+- `cybopal_routine`: built-ins (`wave-hello`, `posture-cycle`, `meeting-brief`, `nod`), up to 24 steps of your own,
+  and routines you designed on the simulator and saved with `save_as`.
 - `cybopal_stop`: emergency stop.
+
+## Design on the simulator, deploy to the unit
+
+The DevKit simulator is where new actions are engineered before they touch hardware. Hermes builds a routine as
+steps, runs it on the simulator while you watch the arm, adjusts it, and saves it with `save_as`. Saved routines
+run by name and use the DevKit's HTTP contract, the same one it keeps for the hardware, so when the physical CyboPal ONE
+arrives you point `device_url` at it and the tested routines run on it unchanged. The simulator also accepts a camera
+feed (`POST /api/v1/camera/feed/bezel`, a photo standing in for the camera), so vision tasks such as receipt scanning
+can be tested without the device.
 
 ## Safety
 
@@ -91,13 +106,16 @@ Hermes moved the arm to *stand*, set an exact pan and tilt, and wrote both scree
   `/control`, `/mode`, `/camera/bezel`, `/camera/base`). It never follows a redirect and ignores proxy settings from
   the environment, so commands reach only the address you set. No other network access, no telemetry.
 - **Files:** writes camera pictures to its own Hermes data folder (`plugin-data/cybopal-one-devkit/cameras/`), keeping
-  the newest 30 (it deletes only older pictures it took itself).
+  the newest 30 (it deletes only older pictures it took itself), and saved routines to `routines.json` there.
+- **Uploads:** `cybopal_show` reads the picture or video file it is given and sends it to `device_url` (`POST
+  /api/v1/media`). Only PNG, JPEG, WebP, GIF, MP4 and WebM files are sent, each checked by its contents, not its name,
+  up to 64 MB; anything else is refused before any byte leaves the computer.
 - **No secrets, no threads, no hooks, no shell commands, no dependencies** (Python standard library only).
 
 ## Tests
 
 ```bash
-python -m pytest tests                                          # 34 tests against a fake device
+python -m pytest tests                                          # 47 tests against a fake device
 CYBOPAL_SIM_URL=http://127.0.0.1:5000 python -m pytest tests    # plus one against the real simulator
 ```
 

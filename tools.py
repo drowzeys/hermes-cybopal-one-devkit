@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import secrets
 import time
 from pathlib import Path
 from typing import Callable
 
-from .device import DEFAULT_URL, JOINTS, LIMITS, MARKDOWN_MAX, PAULI_MAX, Device, DeviceError
+from .device import DEFAULT_URL, JOINTS, LIMITS, MARKDOWN_MAX, MEDIA_MAX, PAULI_MAX, Device, DeviceError
 
 PLUGIN = "cybopal-one-devkit"
 SETTLE_MAX = 10.0
@@ -99,21 +100,38 @@ SCHEMAS = {
         "Show something on the CyboPal ONE: markdown on the 27-inch main screen and/or a few words on Pauli. Does not "
         "move the arm.",
         {"markdown": _MARKDOWN, "pauli_text": _PAULI}),
+    "cybopal_show": _schema(
+        "cybopal_show",
+        "Show a picture or a video on the CyboPal ONE's 27-inch screen: a chart you made, a meme, a picture or clip from "
+        "Imagination Studio, a camera picture. Give the local file path (PNG, JPEG, WebP, GIF, MP4 or WebM, up to 64 MB). "
+        "It stays on screen until new markdown is shown with cybopal_display, or clear is true.",
+        {"path": {"type": "string", "description": "the picture or video file on this computer"},
+         "caption": {"type": "string", "maxLength": 200, "description": "a short line under it"},
+         "clear": {"type": "boolean", "description": "take the picture or video off the screen instead"}}),
     "cybopal_look": _schema(
         "cybopal_look",
         "Take a picture with one of the CyboPal ONE's cameras (bezel: the front camera on top of the screen, facing "
         "the person; base: the camera in the base) and say where the person is in the front camera's frame. Returns "
-        "the picture as a MEDIA line.",
+        "the picture as a MEDIA line and its file path: to read what is in it (a receipt held up, the person's face "
+        "and mood, an object), pass that path to your vision tool. A selfie is a bezel picture.",
         {"camera": {"type": "string", "enum": ["bezel", "base"], "description": "which camera (default bezel)"}}),
     "cybopal_routine": _schema(
         "cybopal_routine",
         "Run a short sequence on the CyboPal ONE: a built-in routine by name (wave-hello, posture-cycle, meeting-brief, "
         f"nod) or your own steps. Each step is one of: {{\"mode\": ...}}, joint values ({{\"pan\": 20, \"tilt\": 5}}), "
         "{\"markdown\": ...} and/or {\"pauli_text\": ...}, or {\"wait\": seconds}. At most "
-        f"{ROUTINE_STEPS} steps and {ROUTINE_SECONDS:g} seconds of waiting. Stops at once if the device is E-stopped.",
-        {"name": {"type": "string", "enum": list(ROUTINES), "description": "a built-in routine"},
+        f"{ROUTINE_STEPS} steps and {ROUTINE_SECONDS:g} seconds of waiting. Stops at once if the device is E-stopped. "
+        "Design new actions on the DevKit simulator: run your steps, and once they look right, save them with save_as; "
+        "a saved routine then runs by name, on the simulator or, unchanged, on the physical CyboPal ONE. list: true "
+        "lists the saved routines.",
+        {"name": {"type": "string", "description": "a built-in routine (wave-hello, posture-cycle, meeting-brief, nod) "
+                                                   "or one you saved"},
          "steps": {"type": "array", "maxItems": ROUTINE_STEPS, "items": {"type": "object"},
-                   "description": "your own steps, when no name is given"}}),
+                   "description": "your own steps, when no name is given"},
+         "save_as": {"type": "string", "description": "save these steps under this name (letters, digits, dashes) "
+                                                     "after they run without an error"},
+         "description": {"type": "string", "maxLength": 200, "description": "what a saved routine does"},
+         "list": {"type": "boolean", "description": "list the saved routines instead of running one"}}),
     "cybopal_stop": _schema(
         "cybopal_stop",
         "EMERGENCY STOP: freeze the CyboPal ONE's arm where it is. Use it at once, before anything else, whenever the "
@@ -156,6 +174,11 @@ class Settings:
         except (TypeError, ValueError):
             return 3.0
         return max(0.0, min(value, SETTLE_MAX)) if math.isfinite(value) else 3.0
+
+    def routines_file(self) -> Path:
+        if self._data_dir is None:
+            raise DeviceError("no data folder for saved routines")
+        return self._data_dir() / "routines.json"
 
     def frames(self) -> Path:
         if self._data_dir is None:
@@ -231,6 +254,9 @@ def _brief(state: dict, events: int = 0) -> dict:
         out["moving_to"] = target
     shown = str(state.get("display_markdown") or "")
     out["main_display"] = shown[:400] + ("…" if len(shown) > 400 else "")
+    media = state.get("display_media")
+    if isinstance(media, dict):
+        out["main_display"] = f"{media.get('kind', 'media')} on screen" + (f": {media.get('caption')}" if media.get("caption") else "")
     seen = state.get("user_in_frame")
     if isinstance(seen, dict):
         out["person_in_camera"] = _where(seen)
@@ -351,6 +377,57 @@ def cybopal_display(settings: Settings, args: dict) -> str:
         return _error(str(error))
 
 
+# what a file must start with to be sent as that kind of media (the extension alone is never trusted)
+_MAGIC = {".png": ("image/png", (b"\x89PNG\r\n\x1a\n",)), ".jpg": ("image/jpeg", (b"\xff\xd8\xff",)),
+          ".jpeg": ("image/jpeg", (b"\xff\xd8\xff",)), ".gif": ("image/gif", (b"GIF87a", b"GIF89a")),
+          ".webp": ("image/webp", (b"RIFF",)), ".webm": ("video/webm", (b"\x1a\x45\xdf\xa3",)),
+          ".mp4": ("video/mp4", ()), ".m4v": ("video/mp4", ())}
+
+
+def _media(path_text) -> tuple[bytes, str]:
+    """A picture or video file's bytes and type, checked by its contents: nothing else on the computer is ever sent."""
+    if not isinstance(path_text, str) or not path_text.strip() or "\x00" in path_text:
+        raise DeviceError("give the picture or video's file path")
+    path = Path(path_text.strip()).expanduser()
+    ext = path.suffix.lower()
+    if ext not in _MAGIC:
+        raise DeviceError(f"only pictures and videos can be shown ({', '.join(sorted(_MAGIC))}), not {ext or 'that file'}")
+    if not path.is_file():
+        raise DeviceError(f"no such file: {path}")
+    size = path.stat().st_size
+    if size > MEDIA_MAX:
+        raise DeviceError(f"the file is {size // 2**20} MB; the screen takes up to {MEDIA_MAX // 2**20} MB")
+    data = path.read_bytes()
+    mime, starts = _MAGIC[ext]
+    ok = (data[4:8] == b"ftyp") if ext in (".mp4", ".m4v") else any(data.startswith(m) for m in starts)
+    if ext == ".webp":
+        ok = ok and data[8:12] == b"WEBP"
+    if not ok:
+        raise DeviceError(f"{path.name} is not really a {ext[1:].upper()} file")
+    return data, mime
+
+
+def cybopal_show(settings: Settings, args: dict) -> str:
+    try:
+        device = settings.device()
+        state = device.telemetry()
+        if _estopped(state):
+            return _ok({"error": "E-stopped", "note": "The device accepts no commands while E-stopped. " + ESTOP_NOTE,
+                        **_brief(state)})
+        if args.get("clear") is True:
+            return _ok({"done": "cleared the picture or video from the main screen", **_brief(device.clear())})
+        caption = args.get("caption") or ""
+        if not isinstance(caption, str) or len(caption) > 200:
+            raise DeviceError("caption must be text, at most 200 characters")
+        data, mime = _media(args.get("path"))
+        state = device.show(data, mime, caption)
+        shown = state.get("display_media") or {}
+        return _ok({"done": f"showing the {shown.get('kind', 'file')} on the main screen", "file": str(args.get("path")),
+                    **_brief(state)})
+    except (DeviceError, OSError) as error:
+        return _error(str(error))
+
+
 def cybopal_look(settings: Settings, args: dict) -> str:
     try:
         camera = str(args.get("camera") or "bezel").strip().lower()
@@ -365,7 +442,8 @@ def cybopal_look(settings: Settings, args: dict) -> str:
         for stale in old[KEEP_FRAMES:]:  # keep only the newest pictures this plugin took
             stale.unlink(missing_ok=True)
         out = {"camera": camera, "file": str(path), "media_tag": f"MEDIA:{path}",
-               "note": "Include media_tag's MEDIA line in your reply to show the picture."}
+               "note": "Include media_tag's MEDIA line in your reply to show the picture. To read what is in it, pass "
+                       "file to your vision tool; to put it on the big screen, pass file to cybopal_show."}
         try:
             state = device.telemetry()
             if isinstance(state.get("user_in_frame"), dict):
@@ -411,13 +489,34 @@ def _step(device: Device, step) -> str:
     return "; ".join(done)
 
 
+ROUTINE_NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+
+
+def _saved(settings: Settings) -> dict:
+    """The routines saved in this plugin's data folder (routines.json): {name: {"description", "steps"}}."""
+    try:
+        data = json.loads(settings.routines_file().read_text())
+    except (OSError, ValueError, DeviceError):
+        return {}
+    return {k: v for k, v in data.items() if isinstance(v, dict) and isinstance(v.get("steps"), list)} \
+        if isinstance(data, dict) else {}
+
+
 def cybopal_routine(settings: Settings, args: dict) -> str:
     try:
+        saved = _saved(settings)
+        if args.get("list") is True:
+            return _ok({"built_in": {k: v["description"] for k, v in ROUTINES.items()},
+                        "saved": {k: {"description": v.get("description", ""), "steps": len(v["steps"])} for k, v in saved.items()}})
+        save_as = str(args.get("save_as") or "").strip().lower()
+        if save_as and (not ROUTINE_NAME.match(save_as) or save_as in ROUTINES):
+            raise DeviceError("save_as must be letters, digits and dashes (up to 40), and not a built-in routine's name")
         name = str(args.get("name") or "").strip()
         if name:
-            if name not in ROUTINES:
-                raise DeviceError(f"no routine {name!r}: use one of {', '.join(ROUTINES)}")
-            steps = ROUTINES[name]["steps"]
+            routine = ROUTINES.get(name) or saved.get(name)
+            if not routine:
+                raise DeviceError(f"no routine {name!r}: use one of {', '.join([*ROUTINES, *saved])}")
+            steps = routine["steps"]
         else:
             steps = args.get("steps")
             if not isinstance(steps, list) or not steps:
@@ -455,7 +554,15 @@ def cybopal_routine(settings: Settings, args: dict) -> str:
                 settings.sleep(float(step["wait"]))
                 log.append(f"{i}: waited {float(step['wait']):g}s")
         state = device.telemetry()
-        return _ok({"done": f"routine {name or 'custom'}", "steps_done": log, **_brief(state)})
+        out = {"done": f"routine {name or 'custom'}", "steps_done": log, **_brief(state)}
+        if save_as:
+            saved[save_as] = {"description": str(args.get("description") or "")[:200], "steps": steps}
+            path = settings.routines_file(); path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp"); tmp.write_text(json.dumps(saved, indent=1)); tmp.replace(path)
+            out["saved_as"] = save_as
+            out["note"] = (f"Saved: run it any time with name {save_as!r}. It uses the DevKit contract, so it runs "
+                           "unchanged on the physical CyboPal ONE once device_url points at it.")
+        return _ok(out)
     except DeviceError as error:
         return _error(str(error))
 
@@ -474,5 +581,5 @@ def cybopal_stop(settings: Settings, args: dict) -> str:
 
 
 HANDLERS = {"cybopal_status": cybopal_status, "cybopal_mode": cybopal_mode, "cybopal_pose": cybopal_pose,
-            "cybopal_display": cybopal_display, "cybopal_look": cybopal_look, "cybopal_routine": cybopal_routine,
-            "cybopal_stop": cybopal_stop}
+            "cybopal_display": cybopal_display, "cybopal_show": cybopal_show, "cybopal_look": cybopal_look,
+            "cybopal_routine": cybopal_routine, "cybopal_stop": cybopal_stop}

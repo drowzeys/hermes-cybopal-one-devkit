@@ -97,10 +97,25 @@ class FakeDevice(BaseHTTPRequestHandler):
             return self._send(200, FakeDevice.frame, "image/jpeg")
         return self._send(404, {"detail": "Not Found"})
 
+    def do_DELETE(self):
+        if self.path == "/api/v1/media":
+            FakeDevice.posts.append((self.path, "DELETE")); FakeDevice.state["display_media"] = None
+            return self._send(200, {"status": "SUCCESS", "current_state": self._snap()})
+        return self._send(404, {"detail": "Not Found"})
+
     def do_POST(self):
-        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
-        FakeDevice.posts.append((self.path, body))
+        raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
         s = FakeDevice.state
+        if self.path.startswith("/api/v1/media"):
+            FakeDevice.posts.append(("/api/v1/media", {"type": self.headers.get("Content-Type"), "bytes": len(raw),
+                                                       "query": self.path.partition("?")[2]}))
+            if s["mode"] == "estop":
+                return self._send(409, {"detail": "E-stop latched"})
+            kind = "video" if self.headers.get("Content-Type", "").startswith("video/") else "image"
+            s["display_media"] = {"id": 1, "kind": kind, "mime": self.headers.get("Content-Type"), "caption": "", "bytes": len(raw)}
+            return self._send(200, {"status": "SUCCESS", "current_state": self._snap()})
+        body = json.loads(raw or b"{}")
+        FakeDevice.posts.append((self.path, body))
         if self.path == "/api/v1/mode":
             self._set_mode(body["mode"])
         elif self.path == "/api/v1/control":
@@ -288,6 +303,33 @@ def test_routine_checks_every_step_before_moving(fake, steps, says):
     assert not FakeDevice.posts  # a bad step anywhere means nothing moved
 
 
+def test_design_save_and_rerun_a_routine(fake, tmp_path):
+    settings, _ = fake
+    steps = [{"mode": "stand"}, {"wait": 1}, {"pan": 20, "pauli_text": "STRETCH"}, {"wait": 1}, {"mode": "follow"}]
+    out = run(settings, "cybopal_routine", steps=steps, save_as="stretch-break", description="a standing stretch")
+    assert out["saved_as"] == "stretch-break" and "physical CyboPal ONE" in out["note"]
+    assert json.loads((tmp_path / "routines.json").read_text())["stretch-break"]["steps"] == steps
+    FakeDevice.posts.clear()
+    assert run(settings, "cybopal_routine", name="stretch-break")["done"] == "routine stretch-break"
+    assert ("/api/v1/mode", {"mode": "stand"}) in FakeDevice.posts
+    listed = run(settings, "cybopal_routine", list=True)
+    assert listed["saved"]["stretch-break"] == {"description": "a standing stretch", "steps": 5} and "nod" in listed["built_in"]
+
+
+@pytest.mark.parametrize("save_as", ["nod", "../evil", "Bad Name", "x" * 41])
+def test_save_as_names_checked_before_moving(fake, save_as):
+    settings, _ = fake
+    assert "save_as must be" in run(settings, "cybopal_routine", steps=[{"mode": "sit"}], save_as=save_as)["error"]
+    assert not FakeDevice.posts
+
+
+def test_routine_that_fails_is_not_saved(fake, tmp_path):
+    settings, _ = fake
+    run(settings, "cybopal_stop")
+    assert run(settings, "cybopal_routine", steps=[{"mode": "sit"}], save_as="never")["error"] == "E-stopped"
+    assert not (tmp_path / "routines.json").exists()
+
+
 def test_routine_halts_on_estop_midway(fake):
     settings, _ = fake
     calls = []
@@ -357,6 +399,43 @@ def test_command(fake):
     assert "wave-hello" in ctx.cmd("help")
 
 
+PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 64
+MP4 = b"\0\0\0\x18ftypmp42" + b"\0" * 64
+
+
+def test_show_picture_and_video(fake, tmp_path):
+    settings, _ = fake
+    (tmp_path / "chart.png").write_bytes(PNG); (tmp_path / "clip.mp4").write_bytes(MP4)
+    out = run(settings, "cybopal_show", path=str(tmp_path / "chart.png"), caption="Revenue 2026")
+    assert out["done"].startswith("showing the image") and out["main_display"] == "image on screen"
+    assert FakeDevice.posts[-1][1]["type"] == "image/png" and "caption=Revenue+2026" in FakeDevice.posts[-1][1]["query"]
+    out = run(settings, "cybopal_show", path=str(tmp_path / "clip.mp4"))
+    assert FakeDevice.posts[-1][1]["type"] == "video/mp4" and out["main_display"] == "video on screen"
+    assert "cleared" in run(settings, "cybopal_show", clear=True)["done"] and FakeDevice.posts[-1] == ("/api/v1/media", "DELETE")
+
+
+@pytest.mark.parametrize("name, data, says", [(".env", b"KEY=secret", "only pictures and videos"),
+                                              ("notes.txt", b"hello", "only pictures and videos"),
+                                              ("secret.png", b"KEY=secret", "not really a PNG"),
+                                              ("fake.mp4", b"KEY=secret" * 3, "not really a MP4"),
+                                              ("missing.png", None, "no such file")])
+def test_show_sends_only_real_media(fake, tmp_path, name, data, says):
+    settings, _ = fake
+    if data is not None:
+        (tmp_path / name).write_bytes(data)
+    assert says in run(settings, "cybopal_show", path=str(tmp_path / name))["error"]
+    assert not FakeDevice.posts  # nothing left the computer
+
+
+def test_show_refused_while_estopped_and_caption_limit(fake, tmp_path):
+    settings, _ = fake
+    (tmp_path / "a.png").write_bytes(PNG)
+    assert "200 characters" in run(settings, "cybopal_show", path=str(tmp_path / "a.png"), caption="x" * 201)["error"]
+    run(settings, "cybopal_stop")
+    assert run(settings, "cybopal_show", path=str(tmp_path / "a.png"))["error"] == "E-stopped"
+    assert not [p for p in FakeDevice.posts if p[0] == "/api/v1/media"]
+
+
 # ------------------------------------------------------------------------------------------------ real simulator
 SIM = os.environ.get("CYBOPAL_SIM_URL")
 
@@ -375,5 +454,8 @@ def test_against_the_real_simulator(tmp_path):
         assert run(settings, "cybopal_display", markdown="# test", pauli_text="TEST")["pauli_text"] == "TEST"
         assert Path(run(settings, "cybopal_look")["file"]).read_bytes()[:2] == b"\xff\xd8"
         assert run(settings, "cybopal_routine", name="nod")["done"] == "routine nod"
+        png = tmp_path / "shot.png"; png.write_bytes((ROOT / "assets/catalog/banner.png").read_bytes())
+        assert run(settings, "cybopal_show", path=str(png), caption="test")["main_display"] == "image on screen: test"
+        assert run(settings, "cybopal_display", markdown="# back")["main_display"].startswith("# back")
     finally:
         run(settings, "cybopal_mode", mode="follow", clear_estop=True)

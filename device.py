@@ -33,6 +33,7 @@ JOINTS = tuple(LIMITS)
 MARKDOWN_MAX = 8000
 PAULI_MAX = 80
 JPEG_MAX = 8 * 2**20
+MEDIA_MAX = 64 * 2**20
 
 
 class DeviceError(Exception):
@@ -58,11 +59,12 @@ class Device:
         self.url, self.timeout = url, timeout
 
     # ------------------------------------------------------------------------------------------------ transport
-    def _open(self, method: str, path: str, body=None, accept: str = "application/json"):
-        data = json.dumps(body).encode() if body is not None else None
+    def _open(self, method: str, path: str, body=None, accept: str = "application/json", raw: bytes | None = None,
+              content_type: str = "application/json"):
+        data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
         head = {"Accept": accept, "User-Agent": "hermes-cybopal"}
         if data is not None:
-            head["Content-Type"] = "application/json"
+            head["Content-Type"] = content_type
         request = urllib.request.Request(self.url + path, data=data, method=method, headers=head)
         try:
             return _OPENER.open(request, timeout=self.timeout)
@@ -114,6 +116,18 @@ class Device:
     def mode(self, mode: str) -> dict:
         data = self.call("POST", "/api/v1/mode", {"mode": mode}) or {}
         return data.get("current_state") or {}
+
+    def show(self, data: bytes, mime: str, caption: str = "") -> dict:
+        """A picture or video on the 27-inch screen (it replaces the markdown until new markdown is shown)."""
+        query = "?" + urllib.parse.urlencode({"caption": caption}) if caption else ""
+        with self._open("POST", "/api/v1/media" + query, raw=data, content_type=mime) as answer:
+            payload = json.loads(answer.read(4 * 2**20) or b"{}")
+        return payload.get("current_state") or {}
+
+    def clear(self) -> dict:
+        with self._open("DELETE", "/api/v1/media") as answer:
+            payload = json.loads(answer.read(4 * 2**20) or b"{}")
+        return payload.get("current_state") or {}
 
     def frame(self, camera: str) -> bytes:
         """One JPEG from the bezel (front) or base camera."""
