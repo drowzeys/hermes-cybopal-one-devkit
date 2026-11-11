@@ -1,5 +1,5 @@
 name: cybopal-one-devkit
-version: "0.2.1"
+version: "0.2.2"
 manifest_version: 2
 api_version: 1
 description: "Unofficial. Drive a CyboPal ONE (a 27-inch 4K screen on a 6-DOF robotic arm, with the Pauli companion display) from Hermes: follow, posture presets, exact poses, gestures, both screens (markdown, pictures and videos), both cameras and an emergency stop. Works today against the CyboPal ONE DevKit's live simulator; the same contract is kept for the hardware."

@@ -98,9 +98,9 @@ SCHEMAS = {
     "cybopal_display": _schema(
         "cybopal_display",
         "Show text on the CyboPal ONE: simple markdown on the 27-inch main screen and/or a few words on Pauli. The "
-        "screen renders only headings (#), **bold**, lists (-) and paragraphs: no tables, code blocks, images or "
-        "diagram code (mermaid and the like show up as raw text). For a chart, a picture or a video, make the file "
-        "and use cybopal_show. Does not move the arm.",
+        "screen renders headings (#), **bold**, *italics*, lists (- or 1.), simple pipe tables and paragraphs: no "
+        "code blocks, images or diagram code (mermaid and the like show up as raw text). For a chart, a picture or a "
+        "video, make the file and use cybopal_show. Does not move the arm.",
         {"markdown": _MARKDOWN, "pauli_text": _PAULI}),
     "cybopal_show": _schema(
         "cybopal_show",
@@ -421,7 +421,7 @@ def cybopal_show(settings: Settings, args: dict) -> str:
         caption = args.get("caption") or ""
         if not isinstance(caption, str) or len(caption) > 200:
             raise DeviceError("caption must be text, at most 200 characters")
-        data, mime = _media(args.get("path"))
+        data, mime = _media(args.get("path") or args.get("file"))  # "file" too: what other tools call a path
         state = device.show(data, mime, caption)
         shown = state.get("display_media") or {}
         return _ok({"done": f"showing the {shown.get('kind', 'file')} on the main screen", "file": str(args.get("path")),

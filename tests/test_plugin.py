@@ -411,6 +411,7 @@ def test_show_picture_and_video(fake, tmp_path):
     assert FakeDevice.posts[-1][1]["type"] == "image/png" and "caption=Revenue+2026" in FakeDevice.posts[-1][1]["query"]
     out = run(settings, "cybopal_show", path=str(tmp_path / "clip.mp4"))
     assert FakeDevice.posts[-1][1]["type"] == "video/mp4" and out["main_display"] == "video on screen"
+    assert run(settings, "cybopal_show", file=str(tmp_path / "chart.png"))["main_display"] == "image on screen"  # alias
     assert "cleared" in run(settings, "cybopal_show", clear=True)["done"] and FakeDevice.posts[-1] == ("/api/v1/media", "DELETE")
 
 
