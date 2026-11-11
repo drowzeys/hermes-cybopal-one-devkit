@@ -76,8 +76,11 @@ SCHEMAS = {
         {}),
     "cybopal_mode": _schema(
         "cybopal_mode",
-        "Put the CyboPal ONE in a mode: follow (the arm keeps the screen on the person), a posture preset (sit, stand, "
-        "recline, meeting, stow), the wave gesture, or idle. Waits for the arm to settle and returns its pose.",
+        "Put the CyboPal ONE in a mode. follow: the arm keeps the screen pointed at the person (it does not change the "
+        "height). sit: desk height for a seated person. stand: raises the screen to standing height (\"I'm standing up\", "
+        "\"raise the screen\"). recline: lowers the screen and tilts it for leaning back. meeting: turns the screen toward "
+        "a guest. stow: folds the arm away. wave: a greeting gesture with the screen. idle: holds still. Waits for the "
+        "arm to settle and returns its pose.",
         {"mode": {"type": "string", "enum": list(dict.fromkeys(MODES)), "description": "the mode"},
          "clear_estop": {"type": "boolean", "description": "release an emergency stop. Only when the person has said "
                                                           "it is safe to move again."},
