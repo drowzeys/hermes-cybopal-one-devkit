@@ -1,4 +1,6 @@
-# CyboPal ONE for Hermes
+# CyboPal ONE DevKit for Hermes (unofficial)
+
+![Hermes driving the CyboPal ONE DevKit simulator](assets/catalog/banner.png)
 
 Drive a **CyboPal ONE** from [Hermes Agent](https://hermes-agent.nousresearch.com/): ask in plain words from Telegram,
 Discord, the Desktop app or the CLI, and Hermes moves the robotic screen, writes on its displays, looks through its
@@ -24,12 +26,12 @@ device ships, point `device_url` at it.
 2. Install the plugin:
 
    ```bash
-   hermes plugins install https://github.com/drowzeys/hermes-cybopal
-   hermes plugins enable cybopal
+   hermes plugins install drowzeys/hermes-cybopal-one-devkit --enable
    ```
 
-3. If the simulator runs on another machine, set its address in the plugin's settings (`device_url`, for example
-   `http://192.168.1.20:5000`). Restart the gateway so it loads the plugin.
+3. If the simulator runs on another machine, set its address in the plugin's settings
+   (`plugins.entries.cybopal-one-devkit.settings.device_url`, for example `http://192.168.1.20:5000`).
+   Restart the gateway so it loads the plugin. Its tools are in the `cybopal_devkit` toolset.
 
 ## What you can ask
 
@@ -42,6 +44,16 @@ device ships, point `device_url` at it.
 
 Or the command: `/cybopal`, `/cybopal stop`, `/cybopal sit`, `/cybopal say HELLO`, `/cybopal show # Hi`,
 `/cybopal look`, `/cybopal run wave-hello`, `/cybopal resume`.
+
+## Screenshots
+
+Hermes moved the arm to *stand*, set an exact pan and tilt, and wrote both screens:
+
+![Hermes driving the simulator](assets/catalog/01-hermes-driving.jpg)
+
+"Stop!": the arm froze, and every move is refused until the person says it is safe:
+
+![Emergency stop](assets/catalog/02-emergency-stop.jpg)
 
 ## Tools
 
@@ -78,7 +90,8 @@ Or the command: `/cybopal`, `/cybopal stop`, `/cybopal sit`, `/cybopal say HELLO
 - **Network:** talks only to `device_url`, over the DevKit's HTTP contract (`/api/v1/health`, `/limits`, `/telemetry`,
   `/control`, `/mode`, `/camera/bezel`, `/camera/base`). It never follows a redirect and ignores proxy settings from
   the environment, so commands reach only the address you set. No other network access, no telemetry.
-- **Files:** writes camera pictures to its own Hermes data folder (`cameras/`), keeping the newest 30.
+- **Files:** writes camera pictures to its own Hermes data folder (`plugin-data/cybopal-one-devkit/cameras/`), keeping
+  the newest 30 (it deletes only older pictures it took itself).
 - **No secrets, no threads, no hooks, no shell commands, no dependencies** (Python standard library only).
 
 ## Tests

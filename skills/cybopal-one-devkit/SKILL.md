@@ -1,5 +1,5 @@
 ---
-name: cybopal
+name: cybopal-one-devkit
 description: How to drive the CyboPal ONE robotic screen with the cybopal_* tools (follow, postures, poses, gestures, both screens, cameras) and the safety rules for a machine that moves next to a person.
 ---
 

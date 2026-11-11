@@ -17,7 +17,7 @@ from typing import Callable
 
 from .device import DEFAULT_URL, JOINTS, LIMITS, MARKDOWN_MAX, PAULI_MAX, Device, DeviceError
 
-PLUGIN = "cybopal"
+PLUGIN = "cybopal-one-devkit"
 SETTLE_MAX = 10.0
 ROUTINE_STEPS = 24
 ROUTINE_SECONDS = 60.0
@@ -123,7 +123,7 @@ TOOL_NAMES = tuple(SCHEMAS)
 
 # ------------------------------------------------------------------------------------------------------ settings
 class Settings:
-    """The plugin's settings (``plugins.entries.cybopal.settings``), read at each call."""
+    """The plugin's settings (``plugins.entries.cybopal-one-devkit.settings``), read at each call."""
 
     def __init__(self, get_config: Callable | None = None, data_dir: Callable[[], Path] | None = None,
                  clock=time.monotonic, sleep=time.sleep) -> None:

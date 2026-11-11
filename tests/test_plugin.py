@@ -159,7 +159,7 @@ def test_manifest_matches_registrations():
             skills.append(name)
 
     plugin.register(Ctx())
-    assert registered == list(tools.TOOL_NAMES) and commands == ["cybopal"] and skills == ["cybopal"]
+    assert registered == list(tools.TOOL_NAMES) and commands == ["cybopal"] and skills == ["cybopal-one-devkit"]
 
 
 # ------------------------------------------------------------------------------------------------ tools

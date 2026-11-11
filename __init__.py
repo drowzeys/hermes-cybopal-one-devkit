@@ -1,4 +1,4 @@
-"""CyboPal ONE for Hermes: move the robotic screen, show things on it, look through its cameras, stop it.
+"""CyboPal ONE DevKit for Hermes (unofficial): move the robotic screen, show things on it, look through its cameras, stop it.
 
 Registers the cybopal_* tools, the /cybopal command and the cybopal skill. Everything goes to the CyboPal ONE DevKit's
 HTTP contract at the ``device_url`` setting (default http://127.0.0.1:5000): the DevKit's live simulator today, the
@@ -63,7 +63,7 @@ def register(ctx) -> None:
 
     for name in tools.TOOL_NAMES:
         handler = tools.HANDLERS[name]
-        ctx.register_tool(name=name, toolset="cybopal", schema=tools.SCHEMAS[name],
+        ctx.register_tool(name=name, toolset="cybopal_devkit", schema=tools.SCHEMAS[name],
                           handler=lambda args, _h=handler, **kwargs: _h(settings, args),
                           description=tools.SCHEMAS[name]["description"],
                           emoji="🛑" if name == "cybopal_stop" else "🦾")
