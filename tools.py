@@ -1,7 +1,8 @@
 """The tools Hermes calls: schemas (what the model reads) and handlers (what runs).
 
 Every handler returns a JSON string and never raises. Motion is refused while the device is E-stopped; only
-``cybopal_mode`` with ``clear_estop`` releases it, and only ``cybopal_stop`` is allowed at every moment.
+no tool can release it (only the person, with ``/cybopal resume``, which calls ``resume``), and only
+``cybopal_stop`` is allowed at every moment.
 A camera frame is saved in this plugin's data folder and named in ``media_tag`` as a ``MEDIA:<path>`` line, which
 Hermes delivers to the chat (Telegram, Discord, Desktop, ...).
 """
@@ -83,8 +84,6 @@ SCHEMAS = {
         "a guest. stow: folds the arm away. wave: a greeting gesture with the screen. idle: holds still. Waits for the "
         "arm to settle and returns its pose.",
         {"mode": {"type": "string", "enum": list(dict.fromkeys(MODES)), "description": "the mode"},
-         "clear_estop": {"type": "boolean", "description": "release an emergency stop. Only when the person has said "
-                                                          "it is safe to move again."},
          "settle_seconds": {"type": "number", "minimum": 0, "maximum": SETTLE_MAX,
                             "description": "how long to wait for the arm to arrive (default: the plugin setting, 3)"}},
         ("mode",)),
@@ -242,8 +241,8 @@ def _estopped(state: dict) -> bool:
     return state.get("mode") == "estop" or bool((state.get("safety") or {}).get("estop"))
 
 
-ESTOP_NOTE = ("The CyboPal is E-stopped, so it will not move. Ask the person whether it is safe; only then call "
-              "cybopal_mode with clear_estop true.")
+ESTOP_NOTE = ("The CyboPal is E-stopped, so it will not move. No tool can release it: tell the person, and when "
+              "they decide it is safe they run /cybopal resume themselves.")
 
 
 def _brief(state: dict, events: int = 0) -> dict:
@@ -336,11 +335,26 @@ def cybopal_mode(settings: Settings, args: dict) -> str:
             return _error("motion is switched off in this plugin's settings (allow_motion)")
         device = settings.device()
         state = device.telemetry()
-        if _estopped(state) and args.get("clear_estop") is not True:
+        if _estopped(state):
             return _ok({"error": "E-stopped", "note": ESTOP_NOTE, **_brief(state)})
         device.mode(MODES[wanted])
         state, arrived = _settle(settings, device, settings.settle(args))
         return _ok({"done": f"mode {wanted}", "arrived": arrived, **_brief(state)})
+    except DeviceError as error:
+        return _error(str(error))
+
+
+def resume(settings: Settings, mode: str = "follow") -> str:
+    """Release an emergency stop. Not a tool: only the person's ``/cybopal resume`` command calls it."""
+    try:
+        if mode not in MODES:
+            raise DeviceError(f"no mode {mode!r}")
+        if not settings.motion_allowed():
+            return _error("motion is switched off in this plugin's settings (allow_motion)")
+        device = settings.device()
+        device.mode(MODES[mode])
+        state, arrived = _settle(settings, device, settings.settle({}))
+        return _ok({"done": f"E-stop released, mode {mode}", "arrived": arrived, **_brief(state)})
     except DeviceError as error:
         return _error(str(error))
 
@@ -576,8 +590,8 @@ def cybopal_stop(settings: Settings, args: dict) -> str:
         if not _estopped(state):
             state = device.telemetry()
         return _ok({"done": "EMERGENCY STOP", "stopped": _estopped(state),
-                    "note": "The arm is frozen. It stays stopped until the person says it is safe and cybopal_mode "
-                            "is called with clear_estop true.", **_brief(state)})
+                    "note": "The arm is frozen. It stays stopped until the person runs /cybopal resume; no tool "
+                            "can release it.", **_brief(state)})
     except DeviceError as error:
         return _error(str(error))
 

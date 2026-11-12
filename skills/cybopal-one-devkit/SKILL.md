@@ -13,8 +13,8 @@ they usually drive the DevKit's live simulator, which behaves the same way.
 
 1. **Stop means stop.** If the person says stop, freeze, wait, ouch, or anything that suggests the arm is in the way,
    call `cybopal_stop` first, before answering or doing anything else.
-2. **Never clear an E-stop on your own.** While it is E-stopped the device refuses motion. Ask the person whether it
-   is safe; only after they say so, call `cybopal_mode` with `clear_estop: true` (usually with mode `follow`).
+2. **You cannot clear an E-stop.** While it is E-stopped the device refuses motion and no tool can release it. Tell
+   the person it is stopped; when they decide it is safe, they run `/cybopal resume` themselves.
 3. **Small moves near the person.** Prefer presets and follow mode. For exact poses, change one or two joints at a
    time and check the result. Out-of-range values are refused, not clamped: read `joint_limits` from `cybopal_status`.
 4. If motion is switched off in the plugin's settings, say so; screens and cameras still work.

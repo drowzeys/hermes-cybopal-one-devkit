@@ -78,7 +78,7 @@ def register(ctx) -> None:
         if verb in ("stop", "estop", "freeze"):
             return _line(tools.cybopal_stop(settings, {}))
         if verb == "resume":
-            return _line(tools.cybopal_mode(settings, {"mode": "follow", "clear_estop": True}))
+            return _line(tools.resume(settings, "follow"))
         if verb in tools.MODES:
             return _line(tools.cybopal_mode(settings, {"mode": verb}))
         if verb == "say" and rest:

@@ -86,9 +86,8 @@ can be tested without the device.
 
 - **Emergency stop always works**, even with motion switched off, and the bundled skill tells the agent to call it
   first whenever the person says stop, freeze or wait.
-- **An E-stop is never cleared by the agent on its own.** Every motion tool refuses while the device is E-stopped (the
-  plugin checks before sending anything); only `cybopal_mode` with `clear_estop: true` releases it, and the skill
-  tells the agent to ask the person first.
+- **Only the person can clear an E-stop.** Every motion tool refuses while the device is E-stopped (the plugin checks
+  before sending anything), and no tool can release it: the person runs `/cybopal resume` themselves.
 - **Nothing moves on a bad request.** Joint values are checked against the limits and refused, not clamped. A routine
   is checked step by step before its first step runs; it is capped at 24 steps and 60 seconds, and it stops at once
   if the device is E-stopped midway.

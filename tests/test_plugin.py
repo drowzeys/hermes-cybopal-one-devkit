@@ -224,16 +224,22 @@ def test_stop_then_motion_refused_until_cleared(fake):
                        ("cybopal_routine", {"name": "nod"}), ("cybopal_display", {"pauli_text": "HI"})):
         before = len(FakeDevice.posts)
         out = run(settings, name, **args)
-        assert out["error"] == "E-stopped" and "clear_estop" in out["note"]
+        assert out["error"] == "E-stopped" and "/cybopal resume" in out["note"]
         assert len(FakeDevice.posts) == before, name  # the plugin never sends "mode: agent" past an E-stop
-    out = run(settings, "cybopal_mode", mode="follow", clear_estop=True)
+    out = json.loads(tools.resume(settings))  # only the person's /cybopal resume reaches this
     assert out["mode"] == "tracking" and out["safety"]["estop"] is False
 
 
-def test_clear_estop_must_be_true_not_truthy(fake):
+@pytest.mark.parametrize("flag", [True, "yes", 1])
+def test_no_tool_can_clear_estop(fake, flag):
     settings, _ = fake
     run(settings, "cybopal_stop")
-    assert run(settings, "cybopal_mode", mode="sit", clear_estop="yes")["error"] == "E-stopped"
+    before = len(FakeDevice.posts)
+    for mode in ("follow", "sit", "idle"):
+        assert run(settings, "cybopal_mode", mode=mode, clear_estop=flag)["error"] == "E-stopped"
+    assert len(FakeDevice.posts) == before  # nothing reached the arm
+    assert all("clear_estop" not in json.dumps(schema) for schema in tools.SCHEMAS.values())
+    assert "resume" not in tools.HANDLERS
 
 
 def test_allow_motion_off(fake):
@@ -394,7 +400,8 @@ def test_command(fake):
     assert "mode tracking" in ctx.cmd("")
     assert "EMERGENCY STOP" in ctx.cmd("stop")
     assert "E-stopped" in ctx.cmd("sit")
-    assert "mode follow" in ctx.cmd("resume")
+    assert "E-stopped" in ctx.cmd("follow")
+    assert "E-stop released, mode follow" in ctx.cmd("resume")
     assert "Pauli 'HI THERE'" in ctx.cmd("say HI THERE")
     assert "wave-hello" in ctx.cmd("help")
 
@@ -449,7 +456,7 @@ def test_against_the_real_simulator(tmp_path):
         assert run(settings, "cybopal_status")["status"] in ("ONLINE", "ESTOP")
         run(settings, "cybopal_stop")
         assert run(settings, "cybopal_pose", pan=10)["error"] == "E-stopped"
-        assert run(settings, "cybopal_mode", mode="sit", clear_estop=True)["arrived"] is True
+        assert json.loads(tools.resume(settings, "sit"))["arrived"] is True
         out = run(settings, "cybopal_pose", pan=25, tilt=-4, height_mm=260)
         assert out["arrived"] and abs(out["pose"]["pan"] - 25) < 1.5 and out["mode"] == "agent"
         assert run(settings, "cybopal_display", markdown="# test", pauli_text="TEST")["pauli_text"] == "TEST"
@@ -459,4 +466,4 @@ def test_against_the_real_simulator(tmp_path):
         assert run(settings, "cybopal_show", path=str(png), caption="test")["main_display"] == "image on screen: test"
         assert run(settings, "cybopal_display", markdown="# back")["main_display"].startswith("# back")
     finally:
-        run(settings, "cybopal_mode", mode="follow", clear_estop=True)
+        tools.resume(settings)
